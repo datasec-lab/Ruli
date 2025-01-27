@@ -11,19 +11,11 @@ Welcome to **RULI**! 🎉 This repository provides a MIA attack to Rectify the E
 ---
 
 Before running the code, make sure you have:
-- 🐍 Python 3.8 or above
-- 📦 Required dependencies (install using `pip install -r requirements.txt`)
-- 💻 Compatible OS: Linux, MacOS, or Windows
+-  Python 3.8 or above
+-  Required dependencies (install using `conda env create -f requirements.yml -n <your_env_name>`)
 
 ---
 
-## ⚙️ Installation
-
-
-- Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
 
 ---
 
@@ -36,17 +28,17 @@ This step is only necessary for identifying the protected and safe samples to us
 
 - Run Standard LIRA to get the protected and safe samples. For example, using the CIFAR10 dataset with ResNet-18 as the default:
   ```bash
-  python recall_main.py --dataset cifar10 --train_epochs 50 --shadow_num 128 --device cuda --result_path your_path
+  python recall_main.py --dataset cifar10 --train_epochs 50 --shadow_num 128 --device your_device --result_path your_path
   ```
 - This will save the protected and safe sample indices in the specified path for use in the next steps.
 
 ---
 
-### 2️⃣ **Step 2**: Train Shadow Models
+### 2️⃣ **Step 2**: Train and Unlearn Shadow Models
 Train shadow models and save the logit-scaled confidences for each sample using `unlearn_mia.py`. For example:
 
   ```bash
-  python unlearn_mia.py --vulnerable_path your_vulnerable_file.pt --privacy_path your_protected_path.pt --dataset cifar10 --shadow_num 90 --device cuda --return_accuracy --task mixed --train_shadow --unlearn_method Scrub
+  python unlearn_mia.py --vulnerable_path your_vulnerable_file --privacy_path your_protected_file --dataset cifar10 --shadow_num 90 --device your_device --return_accuracy --task mixed --train_shadow --unlearn_method Scrub
   ```
 - This step saves the shadow models and performs the attack. If you only want to perform the attack using pre-trained shadow models, skip to Step 3.
 
@@ -56,7 +48,7 @@ Train shadow models and save the logit-scaled confidences for each sample using 
 Run the attack to get the results:
 
   ```bash
-  python unlearn_mia.py --vulnerable_path your_path_vulnerable.pt --privacy_path ./attack/attack_inferences/cifar10/privacy_samples_indices.pt --dataset cifar10 --shadow_num 90 --device cuda --return_accuracy --task mixed --unlearn_method ScrubNew
+  python unlearn_mia.py --vulnerable_path your_vulnerable_file --privacy_path your_protected_file --dataset cifar10  --device your_device --return_accuracy --task mixed --unlearn_method Scrub --saved_results your_saved_results
   ```
 - This step outputs both the efficacy and privacy leakage of the unlearning method in a single run.
 
@@ -89,6 +81,3 @@ Hyperparameters can be specified using the configuration file located at:
 
 ---
 
-```bash
-     python recall_main.py --dataset cifar10 --train_epochs 50 --shadow_num 128 --device cuda --result_path your_path
-```
