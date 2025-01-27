@@ -17,8 +17,6 @@ Before running the code, make sure you have:
 ---
 
 
----
-
 ## 🚀 Usage
 
 To run the code, follow these three steps:
@@ -30,7 +28,7 @@ This step is only necessary for identifying the protected and safe samples to us
   ```bash
   python recall_main.py --dataset cifar10 --train_epochs 50 --shadow_num 128 --device your_device --result_path your_path
   ```
-- This will save the protected and safe sample indices in the specified path for use in the next steps.
+- This will save the protected and vulnerable samples indices in the specified path for use in the next steps.
 
 ---
 
@@ -54,7 +52,6 @@ Run the attack to get the results:
 
 ---
 
----
 
 ## 🛠 Configurations
 
@@ -73,7 +70,7 @@ Specifies the unlearning method to perform. Options include:
 - `GA+`
 - `NegGrad+`
 
----
+
 Hyperparameters can be specified using the configuration file located at:
 ```
 ./core/unlearn_config.json
