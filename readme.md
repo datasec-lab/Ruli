@@ -62,6 +62,7 @@ Specifies the task to perform. Options include:
 - `mixed`: Vulnerable and protected samples with equal sizes (**requires Step 1**).
 - `canary`: Vulnerable samples and random samples with equal sizes (**requires Step 1**). 
   - *Note*: Use `canary` only for privacy leakage evaluation.
+  - *Note*: For each `-task`, the corresponding shadow models should be trained and unlearned. 
 
 ### `--unlearn_method`
 Specifies the unlearning method to perform. Options include:
