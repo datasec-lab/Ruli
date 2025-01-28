@@ -21,8 +21,8 @@ Before running the code, make sure you have:
 
 To run the code, follow these three steps:
 
-### 1️⃣ **Step 1 (Optional)**: Identify Protected and Safe Samples
-This step is only necessary for identifying the protected and safe samples to use in the attack.
+### 1️⃣ **Step 1 (Optional)**: Identify Protected and Vulnerable Samples
+This step is only necessary for identifying the protected and vulnerable samples to use in the attack.
 
 - Run Standard LIRA to get the protected and safe samples. For example, using the CIFAR10 dataset with ResNet-18 as the default:
   ```bash
