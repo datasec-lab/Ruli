@@ -421,7 +421,7 @@ class TargetModelEvaluator:
 
         self.plot_roc_curve(true_labels, unl_likelihood_ratios)
 
-        if self.args.task == 'mixed':
+        if self.args.task == 'mixed' or self.args.task == 'canary':
             idx_to_likelihood = {idx.item(): ratio for idx, ratio in zip(all_samples_indexes, unl_likelihood_ratios)}
             idx_to_label = {idx.item(): label for idx, label in zip(all_samples_indexes, true_labels)}
             # we defined any index < 600 as lower group (vulnerable) and >= 600 as higher group (random/protected)
