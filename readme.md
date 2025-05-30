@@ -53,6 +53,13 @@ Run the attack to get the results:
 ---
 
 
+### Text Generalization experiments 
+please refer to the ./text folder and run the bash file 'script.sh' to run the shadow models;
+Then run the attack using the following command: (example for the `npo` unlearning method)
+```bash
+python mia_inference.py --shadow_path PATH --unlearn_method npo --unlearn_epochs 15
+```
+
 ## 🛠 Configurations
 
 ### `--task`
