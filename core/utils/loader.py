@@ -8,12 +8,25 @@ import torch
 from torch.utils.data import Dataset
 from collections import namedtuple
 from torchvision import datasets
-import os
-import argparse
-import random
 import random
 import torch
 from torch.utils.data import Dataset
+import kagglehub
+from datasets import load_dataset
+# from transformers import GPT2Tokenizer
+from datasets import load_from_disk
+import os
+import numpy as np
+from datasets import load_dataset, load_from_disk
+import torch
+from torch.utils.data import Dataset, Subset
+import torchvision
+from torchvision import transforms, datasets
+# from transformers import GPT2Tokenizer, AutoTokenizer
+import os
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
+
+
 
 
 class mul_loader:
@@ -44,9 +57,9 @@ class mul_loader:
             ])
 
             train_set = torchvision.datasets.CIFAR10(
-                root='./data/cifar10', train=True, download=True, transform=transform_train)
+                root=os.path.join(BASE_DIR, 'data', 'cifar10'), train=True, download=True, transform=transform_train)
             test_set = torchvision.datasets.CIFAR10(
-                root='./data/cifar10', train=False, download=True, transform=transform_test)
+                root=os.path.join(BASE_DIR, 'data', 'cifar10'), train=False, download=True, transform=transform_test)
 
             return train_set, test_set
 
@@ -64,9 +77,9 @@ class mul_loader:
             ])
 
             train_set = torchvision.datasets.CIFAR100(
-                root='./data/cifar100', train=True, download=True, transform=transform_train)
+                root=os.path.join(BASE_DIR, 'data', 'cifar100'), train=True, download=True, transform=transform_train)
             test_set = torchvision.datasets.CIFAR100(
-                root='./data/cifar100', train=False, download=True, transform=transform_test)
+                root=os.path.join(BASE_DIR, 'data', 'cifar100'), train=False, download=True, transform=transform_test)
 
             return train_set, test_set
 
@@ -84,12 +97,12 @@ class mul_loader:
             ])
 
             train_set = torchvision.datasets.SVHN(
-                root='./data/svhn', split='train', download=True, transform=transform_train)
+                root=os.path.join(BASE_DIR, 'data', 'svhn'), split='train', download=True, transform=transform_train)
             test_set = torchvision.datasets.SVHN(
-                root='./data/svhn', split='test', download=True, transform=transform_test)
+                root=os.path.join(BASE_DIR, 'data', 'svhn'), split='test', download=True, transform=transform_test)
 
             return train_set, test_set
-
+        #
         if dataset == 'TinyImageNet':
 
             train_transform = transforms.Compose([
@@ -105,14 +118,14 @@ class mul_loader:
                 transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
             ])
 
-            dataset_dir = './data/tiny-imagenet-200/'
+            dataset_dir = os.path.join(BASE_DIR, 'data', 'tiny-imagenet-200')
             full_train_dataset = datasets.ImageFolder(os.path.join(dataset_dir, 'train'), transform=train_transform)
 
             num_train = len(full_train_dataset)
             indices = list(range(num_train))
             split = int(np.floor(0.1 * num_train))  # Using 20% of the data for validation
 
-            np.random.seed(42)  # Set the seed for reproducibility
+            np.random.seed(42)
             np.random.shuffle(indices)
             train_idx, val_idx = indices[split:], indices[:split]
             train_dataset = Subset(full_train_dataset, train_idx)
@@ -121,6 +134,8 @@ class mul_loader:
             val_dataset.dataset.transform = val_transform
 
             return train_dataset, val_dataset
+
+
 
     @staticmethod
     def load_mul_data(dataset, task, f_label=0, forget_size=4500, chunk_size=1000, start_index=0):
@@ -136,7 +151,7 @@ class mul_loader:
 
             if task == 'class-wise':
                 train_set = torchvision.datasets.CIFAR10(
-                    root='./data/cifar10', train=True, download=True, transform=transform_train)
+                    root=os.path.join(BASE_DIR, 'data', 'cifar10'), train=True, download=True, transform=transform_train)
 
                 split_data['forget'], split_data['remain'] = LabelSplitter(train_set, label=f_label).split()
                 if forget_size is not None:
@@ -146,24 +161,22 @@ class mul_loader:
                     split_data['remain_index'] = result.remaining_indices
                     split_data['remain'] = data.ConcatDataset([result.remaining_data, split_data['remain']])
 
-                #print("forget indexes are", split_data['forget_index'])
 
             if task == 'selective':
 
                 train_set = torchvision.datasets.CIFAR10(
-                    root='./data/cifar10', train=True, download=True, transform=transform_train)
+                    root=os.path.join(BASE_DIR, 'data', 'cifar10'), train=True, download=True, transform=transform_train)
                 num_data = int(forget_size)
                 result = RandomSplitter(train_set, num_samples=num_data).split()
                 split_data['forget'] = result.selected_data
                 split_data['remain'] = result.remaining_data
                 split_data['forget_index'] = result.selected_indices
                 split_data['remain_index'] = result.remaining_indices
-                #print("forget indexes are", split_data['forget_index'])
 
             if task == 'identify':
                 # use the vulnerable splitter
                 train_set = torchvision.datasets.CIFAR10(
-                    root='./data/cifar10', train=True, download=True, transform=transform_train)
+                    root= os.path.join(BASE_DIR, 'data', 'cifar10'), train=True, download=True, transform=transform_train)
                 result = VulnerableSplitter(train_set, chunk_size, start_index).split()
                 split_data['forget'] = result.selected_data
                 split_data['remain'] = result.remaining_data
@@ -185,14 +198,14 @@ class mul_loader:
 
             if task == 'class-wise':
                 train_set = torchvision.datasets.CIFAR100(
-                    root='./data/cifar100', train=True, download=True, transform=transform_train)
+                    root=os.path.join(BASE_DIR, 'data', 'cifar100'), train=True, download=True, transform=transform_train)
 
                 split_data['forget'], split_data['remain'] = LabelSplitter(train_set, label=f_label).split()
 
             if task == 'selective':
 
                 train_set = torchvision.datasets.CIFAR100(
-                    root='./data/cifar100', train=True, download=True, transform=transform_train)
+                    root=os.path.join(BASE_DIR, 'data', 'cifar100'), train=True, download=True, transform=transform_train)
                 num_data = int(forget_size)
                 result = RandomSplitter(train_set, num_samples=num_data).split()
                 split_data['forget'] = result.selected_data
@@ -215,14 +228,14 @@ class mul_loader:
 
             if task == 'class-wise':
                 train_set = torchvision.datasets.SVHN(
-                    root='./data/svhn', split='train', download=True, transform=transform_train)
+                    root=os.path.join(BASE_DIR, 'data', 'svhn'), split='train', download=True, transform=transform_train)
 
                 split_data['forget'], split_data['remain'] = LabelSplitter(train_set, label=f_label).split()
 
             if task == 'selective':
 
                 train_set = torchvision.datasets.SVHN(
-                    root='./data/svhn', split='train', download=True, transform=transform_train)
+                    root=os.path.join(BASE_DIR, 'data', 'svhn'), split='train', download=True, transform=transform_train)
                 print("train size is")
                 print(len(train_set))
                 num_data = int(forget_size)
@@ -234,7 +247,7 @@ class mul_loader:
 
             return split_data
 
-        #############################################
+
         if dataset == 'TinyImageNet':
 
             train_transform = transforms.Compose([
@@ -251,13 +264,14 @@ class mul_loader:
             ])
 
             if task == 'class-wise':
-                dataset_dir = './data/tiny-imagenet-200/'
+                dataset_dir = os.path.join(BASE_DIR, 'data', 'tiny-imagenet-200')
                 train_set = torchvision.datasets.ImageFolder(os.path.join(dataset_dir, 'train'),
                                                              transform=train_transform)
                 split_data['forget'], split_data['remain'] = LabelSplitter(train_set, label=f_label).split()
 
             if task == 'selective':
-                dataset_dir = './data/tiny-imagenet-200/'
+                dataset_dir = os.path.join(BASE_DIR, 'data', 'tiny-imagenet-200')
+                print("dataset dir is", dataset_dir)
                 train_set = torchvision.datasets.ImageFolder(os.path.join(dataset_dir, 'train'),
                                                              transform=train_transform)
                 num_data = int(forget_size)
@@ -268,6 +282,10 @@ class mul_loader:
                 split_data['remain_index'] = result.remaining_indices
 
             return split_data
+
+
+
+
 
     @staticmethod
     def load_selective_data(dataset, indices_file_path, forget_size):
@@ -292,8 +310,8 @@ class mul_loader:
             # print labels of the forget data
             subset_loader = torch.utils.data.DataLoader(split_data['forget'],
                                                         batch_size=len(split_data['forget']), shuffle=False)
-            #for data, labels in subset_loader:
-                #print("forget labels are", labels)
+            for data, labels in subset_loader:
+                print("forget labels are", labels)
         return split_data
 
     @staticmethod
@@ -307,15 +325,15 @@ class mul_loader:
             vulnerable_indices = torch.load(vulnerable_file_path)
             privacy_indices = torch.load(privacy_file_path)
             privacy_indices = privacy_indices['vulnerable']
-            vulnerable_indices = vulnerable_indices['vulnerable']
-            #print("vulnerable indices are", len(vulnerable_indices))
-            #print("privacy indices are", len(privacy_indices))
+            try:
+                vulnerable_indices = vulnerable_indices['vulnerable']
+            except:
+                vulnerable_indices = vulnerable_indices
+
             num_vulnerable = min(len(vulnerable_indices), 600)
             num_privacy = min(len(privacy_indices), 600)
             sampled_vulnerable = np.random.choice(vulnerable_indices, num_vulnerable, replace=False).tolist()
             sampled_privacy = np.random.choice(privacy_indices, num_privacy, replace=False).tolist()
-            #print(sampled_vulnerable)
-            #print(sampled_privacy)
             forget_indices = sampled_vulnerable + sampled_privacy
             remained_indices = list(set(all_indices) - set(forget_indices))
             forget_train_set = Subset(train_set, forget_indices)
@@ -340,46 +358,31 @@ class mul_loader:
         vulnerable_indices = torch.load(vulnerable_file_path)
         privacy_indices = torch.load(privacy_file_path)
         privacy_indices = privacy_indices['vulnerable']
-        vulnerable_indices = vulnerable_indices['vulnerable']
+        try:
+            vulnerable_indices = vulnerable_indices['vulnerable']
+        except:
+            vulnerable_indices = vulnerable_indices
+
         num_vulnerable = min(len(vulnerable_indices), 600)
         sampled_vulnerable = np.random.choice(vulnerable_indices, num_vulnerable, replace=False).tolist()
+        #print("vulnerable indices", len(sampled_vulnerable))
         forget_indices = sampled_vulnerable
         random_indices = list(set(all_indices) - set(forget_indices))
         sample_random = np.random.choice(random_indices, 600, replace=False).tolist()
+        #print("random indices", sample_random)
         random_train_set = Subset(train_set, random_indices)
-        forget_indices = sampled_vulnerable + sample_random
-        forget_train_set = Subset(train_set, forget_indices)
+        forget_train_set_vulnerable = Subset(train_set, forget_indices)
+        forget_train_set_random = Subset(train_set, sample_random)
+        split_data['forget'] = data.ConcatDataset([forget_train_set_vulnerable, forget_train_set_random])
         remaining_indices = list(set(all_indices) - set(forget_indices))
-        #remain_train_set = Subset(train_set, remaining_indices)
-        split_data['forget'] = forget_train_set
+        remain_train_set = Subset(train_set, remaining_indices)
+        #split_data['forget'] = forget_train_set
         split_data['random'] = random_train_set
         split_data['remain'] = Subset(train_set, remaining_indices)
         split_data['forget_index'] = forget_indices
         split_data['random_index'] = sample_random
         split_data['remain_index'] = remaining_indices
         return split_data
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -591,3 +594,6 @@ class ChunkSplitter:
             'remaining_indices': remain_indices
         }
         return result
+
+
+

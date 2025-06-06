@@ -5,7 +5,7 @@
       <paths name="nin22003@datasec2.engr.uconn.edu:22 password">
         <serverdata>
           <mappings>
-            <mapping deploy="/home/nin22003/ruli" local="$PROJECT_DIR$" web="/" />
+            <mapping deploy="/scr/home/nin22003/ruli_clean" local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>

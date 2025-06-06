@@ -1,13 +1,12 @@
-# loading the models
+
 from torch import nn
 import torch
-import argparse
-#from ..models import ResNet18, ResNet18_cifar100, vgg16_bn, wrn28_10
 from models import ResNet18, ResNet18_cifar100, vgg16_bn, wrn28_10, Resnext50
+from torchvision.models import resnet18, resnet50, vgg16_bn
 import timm
 import random
 import numpy as np
-
+import torchvision.models as torch_models
 import torch
 import torch.nn as nn
 import random
@@ -32,6 +31,38 @@ def seed_everything(seed=None):
         torch.backends.cudnn.benchmark = True  # Allows non-deterministic algorithms for better performance
 
 
+def prepare_torchvision_model(args):
+    if args.dataset == 'cifar10':
+        num_classes = 10
+    elif args.dataset == 'cifar100':
+        num_classes = 100
+    elif args.dataset == 'TinyImageNet':
+        num_classes = 200
+
+    if args.arch == 'resnet18':
+        model = resnet18(pretrained=False)
+        model.fc = nn.Linear(model.fc.in_features, num_classes)
+    elif args.arch == 'resnet50':
+        model = resnet50(pretrained=False)
+    elif args.arch == 'vgg16_bn':
+        model = vgg16_bn(pretrained=False)
+    else:
+        raise ValueError(f"Unknown architecture: {args.arch}")
+
+    model.to(args.device)
+    return model
+
+
+# def prepare_compression_model(args):
+#
+#     if args.arch == 'resnet18_filtered':
+#         model = ResNet18Filtered(num_classes=10)
+#     else:
+#         raise ValueError(f"Unknown architecture: {args.arch}")
+#     model.to(args.device)
+#     return model
+
+
 def prepare_model(args, fresh_seed=True):
     """
     Prepares the model by initializing it and optionally loading from a checkpoint,
@@ -51,18 +82,20 @@ def prepare_model(args, fresh_seed=True):
         model.to(args.device)
     return model
 
-
 def load_model(args):
     """
     Function to load a model architecture based on the arguments provided.
     """
     num_classes = 10
     model = None
+
     if args.dataset == 'cifar100':
         num_classes = 100
     elif args.dataset == 'TinyImageNet':
         num_classes = 200
 
+
+    # Vision models
     if args.arch == 'resnet18':
         model = ResNet18(num_classes=num_classes)
     elif args.arch == 'vgg16_bn':
@@ -70,15 +103,16 @@ def load_model(args):
     elif args.arch == 'wrn28_10':
         model = wrn28_10(num_classes=num_classes)
     elif args.arch == 'vit':
-        model = timm.create_model('swin_large_patch4_window7_224', pretrained=True, drop_path_rate=0.1)
+        model = timm.create_model('swin_small_patch4_window7_224', pretrained=True, drop_path_rate=0.1)
         model.reset_classifier(num_classes=num_classes)
-    elif args.arch == 'resnext50':
-        model = Resnext50(pretrained=True)
 
     else:
         raise ValueError(f"Unknown architecture: {args.arch}")
 
     return model
+
+
+
 
 @staticmethod
 def load_from_checkpoint(net, path, device):

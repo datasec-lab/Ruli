@@ -235,6 +235,73 @@ class Inference:
 
         return results
 
+class InferenceText:
+    def __init__(self, model, args):
+        self.model = model
+        self.device = args.device
+        self.args = args
+
+    def get(self, loader):
+        logits_list = []
+        losses = []
+        confidences = []
+        logit_scaled_confidences = []
+        entropies = []
+        predicted_tokens = []
+
+        self.model.eval()
+        eps = 1e-6  # for numerical stability
+
+        with torch.no_grad():
+            for batch in loader:
+                input_ids = batch['input_ids'].to(self.device)
+                attention_mask = batch['attention_mask'].to(self.device)
+                labels = batch['labels'].to(self.device)  # usually same as input_ids
+
+                outputs = self.model(input_ids, attention_mask=attention_mask, labels=labels)
+                logits = outputs.logits  # shape [B, L, V]
+                loss = outputs.loss.item()
+
+                probs = torch.nn.functional.softmax(logits, dim=-1)  # over vocab dim
+                B, L, V = probs.shape
+
+                # Flatten loss over tokens (same loss for all)
+                losses.extend([loss] * (B * L))
+
+                # True class confidences
+                true_class_probs = probs[torch.arange(B).unsqueeze(1), torch.arange(L), labels].cpu().numpy()
+                confidences.extend(true_class_probs.flatten())
+
+                # Logit-scaled confidences
+                log_f_x_y = np.log(np.clip(true_class_probs, eps, 1 - eps))
+                other_probs = probs.clone()
+                other_probs[torch.arange(B).unsqueeze(1), torch.arange(L), labels] = 0
+                log_other_probs_sum = np.log(np.clip(other_probs.sum(dim=-1).cpu().numpy(), eps, None))
+                stable_logit_confidence = log_f_x_y - log_other_probs_sum
+                logit_scaled_confidences.extend(stable_logit_confidence.flatten())
+
+                # Entropy per token
+                log_probs = torch.nn.functional.log_softmax(logits, dim=-1)
+                entropy = -torch.sum(probs * log_probs, dim=-1).cpu().numpy()
+                entropies.extend(entropy.flatten())
+
+                # Predicted tokens
+                predicted = torch.argmax(probs, dim=-1)
+                predicted_tokens.extend(predicted.cpu().numpy().flatten())
+
+                # Store raw logits if needed
+                logits_list.append(logits.cpu().numpy())
+
+        results = {
+            'logits': np.concatenate(logits_list, axis=0),  # full [B, L, V] collection
+            'losses': np.array(losses),
+            'confidences': np.array(confidences),
+            'logit_scaled_confidences': np.array(logit_scaled_confidences),
+            'entropies': np.array(entropies),
+            'predicted_tokens': np.array(predicted_tokens),
+        }
+
+        return results
 
 
 
@@ -265,62 +332,3 @@ class Inference:
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # def get(self, loader):
-    #     logits = []
-    #     losses = []
-    #     confidences = []
-    #     logit_scaled_confidences = []
-    #     entropies = []
-    #     self.model.eval()
-    #     with torch.no_grad():
-    #         for inputs, targets in loader:
-    #             inputs, targets = inputs.to(self.device), targets.to(self.device)
-    #             output = self.model(inputs)
-    #             logits.extend(output.cpu().numpy().flatten())
-    #             loss = self.criterion(output, targets).item()
-    #             losses.extend([loss] * len(targets))  # Repeat the loss for each sample in the batch
-    #             probs = torch.nn.functional.softmax(output, dim=1)
-    #             confidence, _ = probs.max(dim=1)
-    #             confidences.extend(confidence.cpu().numpy().flatten())
-    #
-    #             # Stable logit scaled confidence calculation
-    #             eps = 1e-6
-    #             f_x_y = probs[range(probs.shape[0]), targets].cpu().numpy()
-    #             log_f_x_y = np.log(np.clip(f_x_y, eps, 1 - eps))
-    #             other_probs = probs.clone()
-    #             other_probs[range(other_probs.shape[0]), targets] = 0  # Set the correct label probability to 0
-    #             log_other_probs_sum = np.log(np.sum(other_probs.cpu().numpy(), axis=1))
-    #             stable_logit_confidence = log_f_x_y - log_other_probs_sum
-    #             logit_scaled_confidences.extend(stable_logit_confidence)
-    #
-    #             log_probs = torch.nn.functional.log_softmax(output, dim=1)
-    #             probs = torch.exp(log_probs)
-    #             entropy = -torch.sum(probs * log_probs, dim=1).cpu().numpy()
-    #             entropies.extend(entropy)
-    #
-    #     results = {
-    #         'logits': np.array(logits),
-    #         'losses': np.array(losses),
-    #         'confidences': np.array(confidences),
-    #         'logit_scaled_confidences': np.array(logit_scaled_confidences),
-    #         'entropies': np.array(entropies)
-    #     }
-    #
-    #     return results

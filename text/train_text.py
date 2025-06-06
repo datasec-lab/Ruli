@@ -137,50 +137,6 @@ class LanguageMIA:
         return unlearn_model(model, forget_dataset, remain_dataset, valid_dataset, tokenizer, args)
 
 
-    # def perform_lm_inference(self, model, token_id_batches, tokenizer, device):
-    #     confidences = []
-    #
-    #     for idx, input_ids_list in enumerate(token_id_batches):
-    #         if not input_ids_list or len(input_ids_list) < 2:
-    #             print(f"[WARNING] Skipping empty or too-short input at idx {idx}")
-    #             continue
-    #
-    #         input_ids = torch.tensor(input_ids_list).unsqueeze(0).to(device)  # shape [1, seq_len]
-    #         attention_mask = torch.ones_like(input_ids).to(device)
-    #
-    #         seq_len = input_ids.shape[1]  # get the actual sequence length
-    #         #print(f"[DEBUG] Input idx {idx}, length: {seq_len}")
-    #
-    #         ngram_window = min(7, seq_len - 1)
-    #         if ngram_window <= 0:
-    #             #print(f"[WARNING] Skipping input at idx {idx} due to insufficient tokens for n-gram window")
-    #             continue
-    #
-    #         start_idx = seq_len - ngram_window - 1
-    #         if start_idx < 0:
-    #             start_idx = 0  # protect against negative indexing
-    #
-    #         target_indices = torch.arange(start_idx, seq_len - 1)
-    #
-    #         with torch.no_grad():
-    #             outputs = model(input_ids=input_ids, attention_mask=attention_mask)
-    #             logits = outputs.logits.squeeze(0)  # shape [seq_len, vocab_size]
-    #
-    #             target_logits = logits[:-1, :]  # shape [seq_len - 1, vocab_size]
-    #             next_token_ids = input_ids[0, 1:]  # shape [seq_len - 1]
-    #
-    #             selected_logits = target_logits[target_indices, :]
-    #             selected_next_tokens = next_token_ids[target_indices]
-    #
-    #             true_next_logits = selected_logits[torch.arange(selected_logits.shape[0]), selected_next_tokens]
-    #             logsumexp = torch.logsumexp(selected_logits, dim=-1)
-    #             avg_logit_scaled_conf = (true_next_logits - logsumexp).mean().item()
-    #
-    #         confidences.append(avg_logit_scaled_conf)
-    #         #print(f"[INFO] Input idx {idx}: avg logit-scaled confidence = {avg_logit_scaled_conf:.4f}")
-    #
-    #     return confidences
-
     def perform_lm_inference(self, model, token_id_batches, tokenizer, device):
         losses = []
 

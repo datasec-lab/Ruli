@@ -1,88 +1,167 @@
-#  RULI: Rectifying Privacy and Efficacy Measurements in Machine Unlearning: A New Inference Attack Perspective
 
-Welcome to **RULI**! 🎉 This repository provides a MIA attack to Rectify the Efficacy and Privacy Leakage of Unlearning
+##  RULI: Rectifying Privacy and Efficacy Measurements in Machine Unlearning: A New Inference Attack Perspective
 
-
-### _Note: This repository is just for reproducibility purposes and the complete code, instructions, and the latest updates will be available soon upon acceptance_
+Welcome to **RULI**! 🎉 This repository provides a MIA attack to evaluate the Efficacy and Privacy Leakage of Machine Unlearning
 
 
-> **Quick Start**: Jump to [Usage Instructions](#-usage) to get started in minutes!
+#### Update: This repository now contains codes and instructions to use RULI. Stay tuned for more updates!
+> **Required**: Please ensure you have the necessary dependencies. (See [Pre-requisites](#-pre-requisites) for details.)
+ 
+> **Getting Started**: Refer to [Usage Instructions](#-usage) for a comprehensive step-by-step guide.  
 
+> **Quick Demo**: Visit [examples](#-scripts) for a streamlined setup and demo execution.
 ---
 
-Before running the code, make sure you have:
--  Python 3.8 or above
--  Required dependencies (install using `conda env create -f requirements.yml -n <your_env_name>`)
-
----
+![RULI!](icon.jpg)
 
 
-## 🚀 Usage
+## Usage- Image Datasets
 
-To run the code, follow these three steps:
+Follow these steps to run the code effectively:
 
-### 1️⃣ **Step 1 (Optional)**: Identify Protected and Vulnerable Samples
-This step is only necessary for identifying the protected and vulnerable samples to use in the attack.
+### 1️⃣ **Step 1 (Optional)**: Identify Protected and Vulnerable Samples  
+This step is required only if you need to identify protected and vulnerable samples for the attack. If you already have these samples (provided by us), you can skip this step.
 
-- Run Standard LIRA to get the protected and safe samples. For example, using the CIFAR10 dataset with ResNet-18 as the default:
-  ```bash
-  python recall_main.py --dataset cifar10 --train_epochs 50 --shadow_num 128 --device your_device --result_path your_path
+- **Command**: Run Standard LIRA to identify protected and vulnerable samples.  
+  Example for CIFAR-10 dataset with ResNet-18:  
   ```
-- This will save the protected and vulnerable samples indices in the specified path for use in the next steps.
-
----
-
-### 2️⃣ **Step 2**: Train and Unlearn Shadow Models
-Train shadow models and save the logit-scaled confidences for each sample using `unlearn_mia.py`. For example:
-
-  ```bash
-  python unlearn_mia.py --vulnerable_path your_vulnerable_file --privacy_path your_protected_file --dataset cifar10 --shadow_num 90 --device your_device --return_accuracy --task mixed --train_shadow --unlearn_method Scrub
+  python recall_main.py --dataset cifar10 --train_epochs 50 --shadow_num 128
   ```
-- This step saves the shadow models and performs the attack. If you only want to perform the attack using pre-trained shadow models, skip to Step 3.
+- **Output**: The indices of protected and vulnerable samples will be saved to the specified path for use in subsequent steps.
 
----
 
-### 3️⃣ **Step 3**: Run the Attack
-Run the attack to get the results:
 
-  ```bash
-  python unlearn_mia.py --vulnerable_path your_vulnerable_file --privacy_path your_protected_file --dataset cifar10  --device your_device --return_accuracy --task mixed --unlearn_method Scrub --saved_results your_saved_results
+### 2️⃣ **Step 2**: Train and Unlearn Shadow Models  
+Train shadow models and save the chosen outputs (defaults is logit-scaled confidences) for each sample. This step also performs the attack.  
+
+- **Command**: Run the following script:  
   ```
-- This step outputs both the efficacy and privacy leakage of the unlearning method in a single run.
+  python unlearn_mia.py --vulnerable_path your_vulnerable_file --privacy_path your_protected_file --dataset cifar10 --shadow_num 90 --task mixed --train_shadow --unlearn_method Scrub --config_path "$CONFIG_PATH
+  ```
+- **Output**: Shadow models are trained, and the attack is performed. If you already have prepared shadow models, skip to Step 3.
 
----
 
 
-### Text Generalization experiments 
-please refer to the ./text folder and run the bash file 'script.sh' to run the shadow models;
-Then run the attack using the following command: (example for the `npo` unlearning method)
-```bash
-python mia_inference.py --shadow_path PATH --unlearn_method npo --unlearn_epochs 15
-```
+### 3️⃣ **Step 3.1**: Run the Attack (Efficacy and Privacy Leakage)  
+Evaluate the efficacy and privacy leakage of the unlearning method in a single run.  
 
-## 🛠 Configurations
+- **Command**: Run the following script:  
+  ```
+  python unlearn_mia.py --vulnerable_path your_vulnerable_file --privacy_path your_protected_file --dataset cifar10 --task mixed --unlearn_method Scrub --config_path "$CONFIG_PATH
+  ```
+- **Output**: (1) Results for both efficacy and privacy leakage. (2) Average case attacks (population) results are also shown as the baseline for privacy leakage.
 
-### `--task`
+
+
+### 3️⃣ **Step 3.2**: Run the Attack (Privacy Leakage on Canary Samples)  
+Evaluate privacy leakage using canary samples for a more realistic scenario.  
+
+- **Command**: Run the following script:  
+  ```
+  python unlearn_mia_canary.py --vulnerable_path your_vulnerable_file --privacy_path your_protected_file --dataset cifar10 --task mixed --unlearn_method Scrub --saved_results $SAVED_PATH --config_path "$CONFIG_PATH
+  ```
+- **Output**: Privacy leakage results for canary samples.  
+
+
+
+
+
+
+
+
+
+
+
+
+
+##  Unlearning Configs
+
+#### `--task`
 Specifies the task to perform. Options include:
 - `class-wise`: Random samples from a specific class.
 - `selective`: Random samples from the dataset.
 - `mixed`: Vulnerable and protected samples with equal sizes (**requires Step 1**).
 - `canary`: Vulnerable samples and random samples with equal sizes (**requires Step 1**). 
   - *Note*: Use `canary` only for privacy leakage evaluation.
-  - *Note*: For each `-task`, the corresponding shadow models should be trained and unlearned. 
+  - *Note*: For each `--task`, the corresponding shadow models should be trained and unlearned. 
 
-### `--unlearn_method`
+#### `--unlearn_method`
 Specifies the unlearning method to perform. Options include:
 - `Scrub`
 - `FT`: Fine-tuning/Sparse Fine-tuning
 - `GA+`
 - `NegGrad+`
 
+#### `--config_path `
+Reference to the configuration file for unlearning hyperparameters loaded from JSON file. 
+It is preferred to use the same settings for training shadow models (Step 2) and target model (Step 3). Example: `--config_path ./core/unlean_configs.json`
 
-Hyperparameters can be specified using the configuration file located at:
-```
-./core/unlearn_config.json
-```
+## Example Scripts
 
+The `.core/examples` directory contains ready-to-use scripts to help you run the code effortlessly.
+
+- **Easy Setup**: Run the code with minimal configuration.  
+- **Pre-prepared Data**: Vulnerable and protected samples for CIFAR-10 and TinyImageNet datasets are included for quick demos.  
+- **Prepared shadow distribution**: Access shadow distributions from our Zenodo repository to save time.
 ---
+
+## Usage - Text Dataset (s)
+
+
+### 1️⃣ Step 1: Identify n-gram random samples
+
+Run the `target_data.py` file to prepare random samples from the WikiText-103 validation data. Example:
+```
+python target_data.py --model_name gpt2 --dataset_name WikiText103 --num_target_samples 1000 --max_length 128 --save_dir ./data/WikiText-103-local/gpt2/selective_dataset_prefixed
+```
+
+please refer to the `./text` folder and run the bash file `shadow_script.sh` to run the shadow models.
+Here is the equivalent python command that reflects the parameters set in the bash script. 
+```
+python attack_main.py --sft_epochs 5 --unlearn_epochs 15 --unlearn_method npo --shadow_num 3 --prefix_epochs 1 --target_data_path ./data/WikiText-103-local/gpt2/selective_dataset_prefixed --device cuda:0
+```
+This command will save the target samples outputs, which are required for running the attack. To perform the attack using the npo unlearning method, use the following command
+```
+python mia_inference.py --shadow_path PATH --unlearn_method npo --sft_epochs 5 --unlearn_epochs 15
+```
+
+
+##  Pre-requisites
+
+Before running the code, make sure you:
+
+- Create a conda environment (Python 3.8 or higher) (example for Python 3.11):
+```
+conda create -n <env_name> python=3.11
+conda activate <env_name>
+```
+- Install _pytorch_ and _tensorflow_ versions that fits your machine.
+-  Please ensure you have the necessary dependencies installed. You can find them in the [requirements.txt](./requirements.txt) 
+file and install them. (install using `pip install -r requirements.txt`).
+
+
+### Datasets
+
+##### _CIFAR-10 and CIFAR-100_
+These datasets will be automatically downloaded into `./core/data/` when running any related code, if they are not already available.
+
+#### _TinyImageNet_
+To use the TinyImageNet dataset, download it manually and place it in the `./core/data/` directory. You can download the dataset from [this link](https://www.kaggle.com/datasets/akash2sharma/tiny-imagenet).
+
+#### _WikiText Dataset_
+The Wikipedia dataset will be automatically downloaded into the `./text/data/` directory using the Hugging Face `datasets` library. You can also find the dataset [here](https://huggingface.co/datasets/Salesforce/wikitext/tree/main/wikitext-103-v1).
+
+#### _Any other Datasets_
+
+You may additionally load any other dataset with slight modifications to the code. Our ./core/loader.py file is designed to handle various datasets, and you can refer to it for guidance on how to load your custom dataset. For text datasets, you can refer to the `./text/utils.py`  file and find `load_data` for loading and processing text data.
+
+
+
+###  Acknowledgements
+
+We would like to thank the authors of the following repositories for publicly sharing their code, which served as valuable references for our implementation.
+
+- [muse-bench](https://github.com/swj0419/muse_bench)
+- [SCRUB](https://github.com/meghdadk/SCRUB)
+- [Unlearn-Sparse](https://github.com/OPTML-Group/Unlearn-Sparse)
 

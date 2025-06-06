@@ -1,0 +1,12 @@
+datasets
+scikit-learn
+seaborn
+accelerate==0.28.0
+deepspeed==0.14.0
+huggingface-hub==0.25.0
+timm==0.9.16
+transformers==4.39.1
+umap-learn==0.5.6
+kagglehub==0.3.11
+wandb==0.16.6
+numpy==1.23.5

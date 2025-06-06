@@ -8,12 +8,14 @@ from attack.train import Retrain
 from utils.loader import mul_loader
 from utils.seed import seed_everything
 from utils import prepare_model
+import os
+import sys
 
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='MIA Threshold')
-    parser.add_argument('--unlearn_method', default='ScrubNew', type=str, help='Unlearning method')
+    parser.add_argument('--unlearn_method', default='Scrub', type=str, help='Unlearning method')
     parser.add_argument('--dataset', default='cifar10', type=str, help='Dataset')
     parser.add_argument('--task', default='selective', type=str, help='Task')
     parser.add_argument('--forget_size', default=600, type=int, help='Forget size')
@@ -33,10 +35,7 @@ def parse_args():
     parser.add_argument('--checkpoint_dir', default='./checkpoint/cifar10', type=str, help='Checkpoint directory')
     parser.add_argument('--forget_label', default=0, type=int, help='Forget label')
     parser.add_argument('--shadow_num', default=36, type=int, help='Number of shadow models')
-    parser.add_argument('--example_index', nargs='+', default=[5], type=int,
-                        help='List of example image indices for monitoring')
-    parser.add_argument('--parallel', default=False, type=bool, help='Parallel training')
-    parser.add_argument('--result_path', default='./attack/attack_inferences', type=str, help='Result path')
+    parser.add_argument('--result_path', default='../attack/attack_inferences', type=str, help='Result path')
     parser.add_argument('--train_shadow', action='store_true', help='Train shadow models')
     parser.add_argument('--saved_results', default=None, type=str, help='Path to saved results')
     parser.add_argument('--target_model_path', default='./pretrained/resnet18/cifar10.pth', type=str,
@@ -44,11 +43,8 @@ def parse_args():
     parser.add_argument('--vulnerable_path', default='./attack/cifar10', type=str, help='Path to vulnerable data')
     parser.add_argument('--privacy_path', default='./data/cifar10', type=str, help='Path to file data')
     parser.add_argument('--return_accuracy', action='store_true', help='Return accuracy after unlearning')
-    parser.add_argument('--return_mia_efficacy', action='store_true', help='Return Basic MIA after unlearning')
-    parser.add_argument('--plot_distributions', action='store_true', help='Plot distributions after unlearning')
-    parser.add_argument('--forget_batch_size', default=16, type=int, help='Forget batch size')
-    parser.add_argument('--remain_batch_size', default=64, type=int, help='Forget epochs')
     parser.add_argument('--test_batch_size', default=128, type=int, help='Forget epochs')
+    parser.add_argument('--config_path', default='./unlearn_config.json', type=str, help="this the config file path for the unlearning parameters")
     return parser.parse_args()
 
 
@@ -128,6 +124,10 @@ def ruli_attack(args):
     unlearning_instance.unlearn()
     trained_model = copy.deepcopy(target_model)
 
+    method_config = MUlMIA.load_unlearn_config(args.config_path)[args.unlearn_method]
+    args.forget_batch_size = method_config.get('forget_batch_size')
+    args.remain_batch_size = method_config.get('remain_batch_size')
+
 
     forget_dict_eval = {'forget': data.DataLoader(train_data, batch_size=args.forget_batch_size, shuffle=True,
                                                   num_workers=args.num_workers),
@@ -147,21 +147,26 @@ def ruli_attack(args):
                                   num_workers=args.num_workers)
 
     unlearn_loader = {'forget': forget_loader, 'remain': remain_loader, 'test': test_loader}
+
+
+
+
     unlearned_model = attack_instance.unlearn_shadow_model(model=target_model, forget_dict=unlearn_loader,
                                                            forget_data={'forget': unlearned_data,
                                                                         'remain': remain_data,
                                                                         'test': test_data},
-                                                           method=args.unlearn_method)
+                                                           method=args.unlearn_method
+                                                           )
 
     MUlMIA.unlearn_utility(unlearned_model, unlearn_loader,
                            {'forget': unlearned_data, 'remain': remain_data, 'test': test_data}, args)
 
-    efficay = TestEvaluator(trained_model, unlearned_model, trained_model, target_data, shadow_results,
+    efficacy = TestEvaluator(trained_model, unlearned_model, trained_model, target_data, shadow_results,
                              in_data_indices, unlearned_data_indices, out_data_indices, args)
 
     privacy_leakage = TargetModelEvaluator(trained_model, unlearned_model, target_data, shadow_results,
                              in_data_indices, unlearned_data_indices, out_data_indices, args)
-    efficay.run_evaluation()
+    efficacy.run_evaluation()
     privacy_leakage.run_evaluation()
     privacy_leakage.run_population_attack()
     privacy_leakage.run_population_attack_vulnerable()

@@ -8,86 +8,103 @@ import torch.utils.data as data
 import os
 import numpy as np
 from sklearn.neighbors import KernelDensity
-from unlearn import  GradientAscent, Scrub, FineTune, GradientAscentPlus, NegGrad
+from unlearn import  GradientAscent, Scrub, FineTune, NegGrad, GradientAscentPlus
 import json
 from .train import Retrain
 from evaluation.accuracy import eval_accuracy
 from evaluation.svc_mia import basic_mia, SVC_MIA, mia_threshold
-import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, auc, accuracy_score
 from sklearn.linear_model import LogisticRegression
+import logging
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
 
 
 
 class MUlMIA:
     def __init__(self, target_data, mul_test_data, attack_data, args):
+        """
+        Initialize the MUlMIA class with target data, test data, attack data, and arguments.
+        """
         self.args = args
         self.target_data = target_data
-        #self.train_data = train_data
         self.attack_data = attack_data
         self.test_data = mul_test_data
-        self.target_loader = data.DataLoader(self.target_data, batch_size=args.batch_size,
-                                             shuffle=False, num_workers=args.num_workers)
-        self.test_loader = data.DataLoader(self.test_data, batch_size=args.batch_size,
-                                           shuffle=False, num_workers=args.num_workers)
+        self.target_loader = self._create_dataloader(self.target_data, args.batch_size, shuffle=False, num_workers=args.num_workers)
+        self.test_loader = self._create_dataloader(self.test_data, args.batch_size, shuffle=False, num_workers= args.num_workers)
         self.output_type = args.output_type
         self.model = prepare_model(args, fresh_seed=True)
         self.result_path = args.result_path
         self.save_dir = os.path.join(self.result_path, self.args.dataset)
+        #TODO: make sure the save_dir exists
         os.makedirs(self.save_dir, exist_ok=True)
         self.unlearning_class = self.get_unlearning_method()
 
+    @staticmethod
+    def _create_dataloader(dataset, batch_size, shuffle, num_workers):
+        """
+        Helper function to create a DataLoader.
+        """
+        return data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
+
     def train_shadow_model(self, model, loader_dict):
+        """
+        Train a shadow model using the provided loaders.
+        """
         unlearning_instance = Retrain(model, loader_dict, self.args)
         unlearning_instance.unlearn()
 
     def unlearn_shadow_model(self, model, forget_dict, forget_data, method):
-        with open('./unlearn_config.json', 'r') as f:
-            all_configs = json.load(f)
+        """
+        Perform unlearning on a shadow model using the specified method.
+        """
+        all_configs = self.load_unlearn_config(self.args.config_path)
 
         if method == 'Retrain':
             fresh_model = prepare_model(self.args, fresh_seed=True)
             loader_dict = {'train': forget_dict['remain'], 'test': forget_dict['test']}
             unlearning_instance = Retrain(fresh_model, loader_dict, self.args)
             unlearning_instance.unlearn()
-            unlearned_model = copy.deepcopy(fresh_model)
-
-
+            unlearned_model = fresh_model
         else:
             method_config = all_configs[method]
-            class UnlearnArgs:
-                def __init__(self, config):
-                    for key, value in config.items():
-                        setattr(self, key, value)
-
-            unlearn_args = UnlearnArgs(method_config)
+            unlearn_args = self._create_unlearn_args(method_config)
             unlearn_args.device = self.args.device  # Override device if necessary
-            print(unlearn_args.__dict__)  # To check loaded hyperparameters
+            logging.debug(unlearn_args.__dict__)  # Log loaded hyperparameters
             unlearning_instance = self.unlearning_class(model, forget_dict, unlearn_args)
             unlearned_model = unlearning_instance.unlearn()
 
         return unlearned_model
 
+    @staticmethod
+    def _create_unlearn_args(config):
+        """
+        Helper function to create unlearn arguments dynamically.
+        """
+        class UnlearnArgs:
+            def __init__(self, config):
+                for key, value in config.items():
+                    setattr(self, key, value)
+
+        return UnlearnArgs(config)
+
     def perform_inference(self, model, loader):
+        """
+        Perform logit scaled confidence inference on the given model and loader. (Other inference methods can be added later)
+        """
         inference = Inference(model, self.args)
         results = inference.get(loader)
         return results['logit_scaled_confidences']
 
-
     def train_shadow_models(self):
+        """
+        Train multiple shadow models and collect their Outputs.
+        """
         N = self.args.shadow_num
         target_indices = list(range(len(self.target_data)))
-        print("len of target data: ", len(self.target_data))
+        logging.info(f"Target data size: {len(self.target_data)}")
         random.shuffle(target_indices)
-        target_to_shadow_map = {idx: {'IN': set(), 'OUT': set(), 'UNLEARN': set()} for idx in target_indices}
-
-        for idx in target_indices:
-            shadow_indices = list(range(N))
-            random.shuffle(shadow_indices)
-            target_to_shadow_map[idx]['IN'] = set(shadow_indices[:N // 3])
-            target_to_shadow_map[idx]['OUT'] = set(shadow_indices[N // 3: 2 * N // 3])
-            target_to_shadow_map[idx]['UNLEARN'] = set(shadow_indices[2 * N // 3:])
+        target_to_shadow_map = self._create_shadow_map(target_indices, N)
 
         in_target_logits_original = {idx: [] for idx in target_indices}
         out_target_logits_original = {idx: [] for idx in target_indices}
@@ -97,137 +114,148 @@ class MUlMIA:
         unlearned_target_logits_unlearned = {idx: [] for idx in target_indices}
 
         for shadow_idx in range(N):
-            print(f"Training shadow model {shadow_idx + 1}/{N}...")
+            logging.info(f"Training shadow model {shadow_idx + 1}/{N}...")
             model = prepare_model(self.args, fresh_seed=True)
-            in_samples = [idx for idx, shadows in target_to_shadow_map.items() if shadow_idx in shadows['IN']]
-            out_samples = [idx for idx, shadows in target_to_shadow_map.items() if shadow_idx in shadows['OUT']]
-            unlearn_samples = [idx for idx, shadows in target_to_shadow_map.items() if shadow_idx in shadows['UNLEARN']]
-            assert len(in_samples) > 0, f"No IN samples found for shadow model {shadow_idx + 1}"
-            assert len(out_samples) > 0, f"No OUT samples found for shadow model {shadow_idx + 1}"
+            in_samples, out_samples, unlearn_samples = self._get_shadow_samples(target_to_shadow_map, shadow_idx)
 
-            combined_samples = in_samples + unlearn_samples
             attack_data = self._generate_attack_data_mixed()
-            if attack_data is None:
-                train_data = data.ConcatDataset([data.Subset(self.target_data, in_samples + unlearn_samples)])
-            else:
-                train_data = data.ConcatDataset([data.Subset(self.target_data, in_samples + unlearn_samples),
-                                                 attack_data])
-
-            target_loader = data.DataLoader(train_data, batch_size=self.args.batch_size, shuffle=True,
-                                            num_workers=self.args.num_workers)
+            train_data = self._create_train_data(in_samples, unlearn_samples, attack_data)
+            target_loader = self._create_dataloader(train_data, self.args.batch_size, shuffle=True, num_workers=self.args.num_workers)
 
             self.train_shadow_model(model, {'train': target_loader, 'test': self.test_loader})
-            in_logits_original = self.perform_inference(model, data.DataLoader(data.Subset(self.target_data, in_samples),
-                                                                               batch_size=self.args.batch_size,
-                                                                               shuffle=False, num_workers=self.args.num_workers))
-            out_logits_original = self.perform_inference(model, data.DataLoader(data.Subset(self.target_data, out_samples),
-                                                                                batch_size=self.args.batch_size,
-                                                                                shuffle=False, num_workers=self.args.num_workers))
-
-            unlearn_logit_original = self.perform_inference(model, data.DataLoader(data.Subset(self.target_data, unlearn_samples),
-                                                                                batch_size=self.args.batch_size,
-                                                                                shuffle=False, num_workers=self.args.num_workers))
-
-            utility_data = {'forget': data.Subset(self.target_data, unlearn_samples),
-                            'remain': data.Subset(self.target_data, in_samples),
-                            'test': self.test_data}
-            utility_loader = {'forget': data.DataLoader(data.Subset(self.target_data, unlearn_samples),
-                                                         batch_size=16, shuffle=True, num_workers=self.args.num_workers),
-                             'remain': data.DataLoader(data.Subset(self.target_data, in_samples),
-                                                      batch_size=64, shuffle=True, num_workers=self.args.num_workers),
-                             'test': self.test_loader}
-
-
-            for idx, logit in zip(in_samples, in_logits_original):
-                in_target_logits_original[idx].append(logit)
-            for idx, logit in zip(out_samples, out_logits_original):
-                out_target_logits_original[idx].append(logit)
-            for idx, logit in zip(unlearn_samples, unlearn_logit_original):
-                unlearn_target_logits_original[idx].append(logit)
+            self._collect_logits(model, in_samples, out_samples, unlearn_samples, in_target_logits_original,
+                                 out_target_logits_original, unlearn_target_logits_original)
 
             if len(unlearn_samples) > 0:
-                forget_loader = data.DataLoader(data.Subset(self.target_data, unlearn_samples),
-                                                batch_size=16, shuffle=True, num_workers=self.args.num_workers)
-                print("len of forget data: ", len(data.Subset(self.target_data, unlearn_samples)))
-                remain_data = data.ConcatDataset([data.Subset(self.target_data, in_samples), attack_data])
-                remain_loader = data.DataLoader(remain_data, batch_size=64, shuffle=True, num_workers=self.args.num_workers)
-                print("len of remain data: ", len(remain_data))
+                unlearned_model = self._perform_unlearning(model, in_samples, unlearn_samples, attack_data)
+                self._collect_logits(unlearned_model, in_samples, out_samples, unlearn_samples, in_target_logits_unlearned,
+                                     out_target_logits_unlearned, unlearned_target_logits_unlearned)
 
-                unlearn_dict = {'forget': forget_loader, 'remain': remain_loader, 'test': self.test_loader}
-
-                unlearn_data = {'forget': data.Subset(self.target_data, unlearn_samples),
-                                'remain': remain_data,
-                                'test': self.test_data}
-
-                unlearned_model = self.unlearn_shadow_model(model, unlearn_dict, unlearn_data, self.args.unlearn_method)
-                MUlMIA.unlearn_utility(unlearned_model, unlearn_dict, unlearn_data, self.args)
-
-            in_logits_unlearned = self.perform_inference(unlearned_model, data.DataLoader(data.Subset(self.target_data, in_samples),
-                                                                                batch_size=self.args.batch_size,
-                                                                                shuffle=False, num_workers=self.args.num_workers))
-
-            out_logits_unlearned = self.perform_inference(unlearned_model, data.DataLoader(data.Subset(self.target_data, out_samples),
-                                                                                 batch_size=self.args.batch_size,
-                                                                                 shuffle=False, num_workers=self.args.num_workers))
-            unlearned_logits_unlearned = self.perform_inference(unlearned_model, data.DataLoader(data.Subset(self.target_data, unlearn_samples),
-                                                                                      batch_size=self.args.batch_size,
-                                                                                      shuffle=False, num_workers=self.args.num_workers))
-
-            for idx, logit in zip(in_samples, in_logits_unlearned):
-                in_target_logits_unlearned[idx].append(logit)
-            for idx, logit in zip(out_samples, out_logits_unlearned):
-                out_target_logits_unlearned[idx].append(logit)
-            for idx, logit in zip(unlearn_samples, unlearned_logits_unlearned):
-                unlearned_target_logits_unlearned[idx].append(logit)
-            print(f"Shadow model {shadow_idx + 1}/{N} inference complete.")
+            logging.info(f"Shadow model {shadow_idx + 1}/{N} inference complete.")
 
         return (in_target_logits_original, out_target_logits_original, unlearn_target_logits_original,
-                in_target_logits_unlearned,
-                out_target_logits_unlearned, unlearned_target_logits_unlearned)
+                in_target_logits_unlearned, out_target_logits_unlearned, unlearned_target_logits_unlearned)
+
+
+    def _create_shadow_map(self, target_indices, N):
+        """
+        Create a mapping of target indices to shadow model samples.
+        """
+        target_to_shadow_map = {idx: {'IN': set(), 'OUT': set(), 'UNLEARN': set()} for idx in target_indices}
+        for idx in target_indices:
+            shadow_indices = list(range(N))
+            random.shuffle(shadow_indices)
+            target_to_shadow_map[idx]['IN'] = set(shadow_indices[:N // 3])
+            target_to_shadow_map[idx]['OUT'] = set(shadow_indices[N // 3: 2 * N // 3])
+            target_to_shadow_map[idx]['UNLEARN'] = set(shadow_indices[2 * N // 3:])
+        return target_to_shadow_map
+
+    def _get_shadow_samples(self, target_to_shadow_map, shadow_idx):
+        """
+        Retrieve IN, OUT, and UNLEARN samples for a shadow model.
+        """
+        in_samples = [idx for idx, shadows in target_to_shadow_map.items() if shadow_idx in shadows['IN']]
+        out_samples = [idx for idx, shadows in target_to_shadow_map.items() if shadow_idx in shadows['OUT']]
+        unlearn_samples = [idx for idx, shadows in target_to_shadow_map.items() if shadow_idx in shadows['UNLEARN']]
+        assert len(in_samples) > 0, f"No IN samples found for shadow model {shadow_idx + 1}"
+        assert len(out_samples) > 0, f"No OUT samples found for shadow model {shadow_idx + 1}"
+        return in_samples, out_samples, unlearn_samples
+
+    def _create_train_data(self, in_samples, unlearn_samples, attack_data):
+        """
+        Create training data for a shadow model.
+        """
+        if attack_data is None:
+            return data.ConcatDataset([data.Subset(self.target_data, in_samples + unlearn_samples)])
+        return data.ConcatDataset([data.Subset(self.target_data, in_samples + unlearn_samples), attack_data])
+
+    def _collect_logits(self, model, in_samples, out_samples, unlearn_samples, in_logits, out_logits, unlearn_logits):
+        """
+        Collect logits for IN, OUT, and UNLEARN samples.
+        """
+        in_logits_original = self.perform_inference(model, self._create_dataloader(data.Subset(self.target_data, in_samples),
+                                                                                   self.args.batch_size, shuffle=False, num_workers=self.args.num_workers))
+        out_logits_original = self.perform_inference(model, self._create_dataloader(data.Subset(self.target_data, out_samples),
+                                                                                    self.args.batch_size, shuffle=False, num_workers=self.args.num_workers))
+        unlearn_logit_original = self.perform_inference(model, self._create_dataloader(data.Subset(self.target_data, unlearn_samples),
+                                                                                       self.args.batch_size, shuffle=False, num_workers=self.args.num_workers))
+        for idx, logit in zip(in_samples, in_logits_original):
+            in_logits[idx].append(logit)
+        for idx, logit in zip(out_samples, out_logits_original):
+            out_logits[idx].append(logit)
+        for idx, logit in zip(unlearn_samples, unlearn_logit_original):
+            unlearn_logits[idx].append(logit)
+
+    def _perform_unlearning(self, model, in_samples, unlearn_samples, attack_data):
+        """
+        Perform unlearning on a shadow model.
+        """
+        all_configs = self.load_unlearn_config(self.args.config_path)
+        method_config = all_configs[self.args.unlearn_method]
+        forget_loader = self._create_dataloader(data.Subset(self.target_data, unlearn_samples),
+                                                method_config.get("forget_batch_size"), shuffle=True, num_workers=self.args.num_workers)
+        remain_data = data.ConcatDataset([data.Subset(self.target_data, in_samples), attack_data])
+        remain_loader = self._create_dataloader(remain_data, method_config.get("remain_batch_size"), shuffle=True, num_workers=self.args.num_workers)
+        unlearn_dict = {'forget': forget_loader, 'remain': remain_loader, 'test': self.test_loader}
+        unlearn_data = {'forget': data.Subset(self.target_data, unlearn_samples), 'remain': remain_data, 'test': self.test_data}
+        return self.unlearn_shadow_model(model, unlearn_dict, unlearn_data, self.args.unlearn_method)
+
 
     def _generate_attack_data_mixed(self):
-        attack_indices = random.sample(range(len(self.attack_data)), self.args.attack_size)
-        attack_data = data.Subset(self.attack_data, attack_indices)
-        return attack_data
+        """
+        Generate mixed attack data.
+        """
+        if not self.attack_data:
+            logging.warning("Attack data is empty. Returning None.")
+            return None
 
-    def collect_results(self, in_target_original, out_target_original, unlearn_target_original,
-                        in_target_unlearned, out_target_unlearned,
-                        unlearned_target_unlearned):
-        results_dict = {
+        attack_indices = random.sample(range(len(self.attack_data)), self.args.attack_size)
+        return data.Subset(self.attack_data, attack_indices)
+
+    def collect_results(self, *logits_dicts):
+        """
+        Collect results into a dictionary.
+        """
+        return {
             'seed': self.args.seed,
-            'in_trained': in_target_original,
-            'out_trained': out_target_original,
-            'unlearn_trained': unlearn_target_original,
-            'in_unlearned': in_target_unlearned,
-            'out_unlearned': out_target_unlearned,
-            'unlearned': unlearned_target_unlearned
+            'in_trained': logits_dicts[0],
+            'out_trained': logits_dicts[1],
+            'unlearn_trained': logits_dicts[2],
+            'in_unlearned': logits_dicts[3],
+            'out_unlearned': logits_dicts[4],
+            'unlearned': logits_dicts[5],
         }
-        return results_dict
 
     def run_attack(self):
-        print("\n" + "=" * 60)
-        print(f"{'Starting Unleanring Inference Attack':^60}")
-        print("=" * 60)
-        print(f"{'Dataset:':<20} {self.args.dataset}")
-        print(f"{'Seed:':<20} {self.args.seed}")
-        print(f"{'Attack Size:':<20} {self.args.attack_size}")
-        print(f"{'Shadow Models:':<20} {self.args.shadow_num}")
-        print(f"{'Output Type:':<20} {self.args.output_type}")
-        print(f"{'Target Data Size:':<20} {len(self.target_data)}")
-        print(f"{'Model Architecture:':<20} {self.args.arch}")
-        print(f"{'Unlearn Method:':<20} {self.args.unlearn_method}")
-        print(f"{'Device:':<20} {self.args.device}")
-        print("=" * 60)
-        (in_target_original, out_target_original, unlearn_target_original, in_target_unlearned, out_target_unlearned,
-         unlearned_target_unlearned) = self.train_shadow_models()
-        results = self.collect_results(in_target_original, out_target_original, unlearn_target_original,
-                                        in_target_unlearned, out_target_unlearned, unlearned_target_unlearned)
-        save_path = os.path.join(self.save_dir, f'results_{self.args.shadow_num}_{self.args.seed}_{self.args.dataset}_{self.args.unlearn_method}_unlearn_{self.args.task}.pth')
+        """
+        Run the unlearning inference attack.
+        """
+        logging.info("Starting Unlearning Inference Attack")
+        logging.info(f"Dataset: {self.args.dataset}, Seed: {self.args.seed}, Attack Size: {self.args.attack_size}")
+        logging.info(f"Shadow Models: {self.args.shadow_num}, Output Type: {self.args.output_type}")
+        logging.info(f"Target Data Size: {len(self.target_data)}, Model Architecture: {self.args.arch}")
+        logging.info(f"Unlearn Method: {self.args.unlearn_method}, Device: {self.args.device}")
+
+        logits_dicts = self.train_shadow_models()
+        results = self.collect_results(*logits_dicts)
+
+        # noqa
+        save_path = os.path.join(
+            self.save_dir,
+            f"shadows_{self.args.shadow_num}_"
+            f"{self.args.seed}_"
+            f"{self.args.unlearn_method}_"
+            f"unlearn_{self.args.task}.pth"
+        )  # Ensure the path is relative to the current directory
+
         torch.save(results, save_path)
-        print(f"Results saved at {save_path}")
+        logging.info(f"Results saved at {save_path}")
         return results
 
     def get_unlearning_method(self):
+        """
+        Get the unlearning method class based on the specified method.
+        """
         unlearning_methods = {
             'GA': GradientAscent,
             'Retrain': Retrain,
@@ -238,10 +266,26 @@ class MUlMIA:
         }
 
         if self.args.unlearn_method not in unlearning_methods:
-            raise ValueError('Invalid unlearn method')
+            raise ValueError(f"Invalid unlearn method: {self.args.unlearn_method}")
 
-        unlearn_method_class = unlearning_methods[self.args.unlearn_method]
-        return unlearn_method_class
+        return unlearning_methods[self.args.unlearn_method]
+
+    @staticmethod
+    def load_unlearn_config(config_path):
+        """
+        Load unlearning configuration from a JSON file.
+        """
+        if not config_path:
+            config_path = './unlearn_config.json'
+            logging.warning("Config file not provided. Using default config file.")
+
+        try:
+            with open(config_path, 'r') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Config file not found at path: {config_path}")
+
+
 
     @staticmethod
     def unlearn_utility(model, LOADER_DICT, DATA_DICT, args):
@@ -252,20 +296,9 @@ class MUlMIA:
             print("ACC on remain data", eval_accuracy(model, LOADER_DICT['remain'], args.device))
             print("ACC on test data", eval_accuracy(model, LOADER_DICT['test'], args.device))
 
-        # this  MIA is from https://github.com/OPTML-Group/Unlearn-Sparse.git;
-        # it is not the same as the one in the paper we exclude it due to high FP rate.
-
-        if args.return_mia_efficacy:
-            print("Evaluating the MIA efficacy after unlearning")
-            mia_efficacy_results = basic_mia(model, DATA_DICT['forget'], DATA_DICT['remain'], DATA_DICT['test'])
-            mia_efficacy_forget = mia_efficacy_results['forget']
-            mia_efficacy_remain = mia_efficacy_results['remain']
-            print("MIA Efficacy Results")
-            print("MIA on forget data", mia_efficacy_forget)
-            print("MIA on remain data", mia_efficacy_remain)
-
         else:
             pass
+
 
 
 class TargetModelEvaluator:
