@@ -1,7 +1,7 @@
 
 ##  RULI: Rectifying Privacy and Efficacy Measurements in Machine Unlearning: A New Inference Attack Perspective
 
-Welcome to **RULI**! 🎉 This repository provides a MIA attack to evaluate the Efficacy and Privacy Leakage of Machine Unlearning
+Welcome to **RULI**! 🎉 This repository is the official implementation of the paper "Rectifying Privacy and Efficacy Measurements in Machine Unlearning: A New Inference Attack Perspective" accepted by USENIX Security '25, which provides a MIA attack to evaluate the Efficacy and Privacy Leakage of Machine Unlearning.
 
 
 #### Update: This repository now contains codes and instructions to use RULI. Stay tuned for more updates!
