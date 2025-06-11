@@ -98,12 +98,14 @@ It is preferred to use the same settings for training shadow models (Step 2) and
 
 ## Example Scripts
 
-The `.core/examples` directory contains ready-to-use scripts to help you run the code effortlessly.
+The `.core/examples` directory offers ready-to-use scripts to make running the code as smooth as possible.
 
-- **Easy Setup**: Run the code with minimal configuration.  
-- **Pre-prepared Data**: Vulnerable and protected samples for CIFAR-10 and TinyImageNet datasets are included for quick demos.  
-- **Prepared shadow distribution**: Access shadow distributions from our Zenodo repository to save time.
----
+- **Effortless Setup**: Run the code with minimal configuration—no hassle, just results.  
+- **Pre-prepared Data**: Vulnerable and protected samples for CIFAR-10, CIFAR-100, and TinyImageNet datasets are included for quick demonstrations. Access them easily via Zenodo.  
+- **Save Time with Shadow Models**: Skip the lengthy shadow model training process! Precomputed shadow distributions for CIFAR-10 and TinyImageNet are available, letting you jump straight into toy demos and focus on results.  
+- *(Find all resources on Zenodo)*
+
+
 
 ## Usage - Text Dataset (s)
 
