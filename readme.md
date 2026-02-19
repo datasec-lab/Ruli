@@ -157,8 +157,6 @@ The Wikipedia dataset will be automatically downloaded into the `./text/data/` d
 
 You may additionally load any other dataset with slight modifications to the code. Our ./core/loader.py file is designed to handle various datasets, and you can refer to it for guidance on how to load your custom dataset. For text datasets, you can refer to the `./text/utils.py`  file and find `load_data` for loading and processing text data.
 
-
-
 ###  Acknowledgements
 
 We would like to thank the authors of the following repositories for publicly sharing their code, which served as valuable references for our implementation.
@@ -166,4 +164,17 @@ We would like to thank the authors of the following repositories for publicly sh
 - [muse-bench](https://github.com/swj0419/muse_bench)
 - [SCRUB](https://github.com/meghdadk/SCRUB)
 - [Unlearn-Sparse](https://github.com/OPTML-Group/Unlearn-Sparse)
+
+### Citation
+
+If you find our paper or code helpful, please cite it as follows: 
+
+```bibtex
+@inproceedings{naderloui2025rectifying,
+  title={Rectifying privacy and efficacy measurements in machine unlearning: A new inference attack perspective},
+  author={Naderloui, Nima and Yan, Shenao and Wang, Binghui and Fu, Jie and Wang, Wendy Hui and Liu, Weiran and Hong, Yuan},
+  booktitle={34th USENIX Security Symposium (USENIX Security 25)},
+  pages={5545--5564},
+  year={2025}
+}
 
